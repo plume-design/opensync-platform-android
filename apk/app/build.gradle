@@ -1,0 +1,140 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    def localPropertiesFile = project.rootProject.file('local.properties')
+
+    namespace 'com.opensync.app'
+    compileSdk 31
+
+    defaultConfig {
+        applicationId "com.opensync.app"
+        minSdk 28
+        targetSdk 28
+        versionCode 1
+        versionName System.getenv("OPENSYNC_VERSION")
+        ndk {
+            // "armeabi-v7a", "arm64-v8a"
+            abiFilters  "arm64-v8a", "armeabi-v7a"
+        }
+        buildConfigField "String", "OSYNC_OBSSID", "\"" + System.getenv("OPENSYNC_BACKHAUL_SSID") + "\""
+    }
+
+    signingConfigs {
+        /* OpenSync is a system APP, so you have to sign with your platform key */
+        release {
+            def properties = new Properties()
+
+            if (localPropertiesFile.exists()) {
+                properties.load(localPropertiesFile.newDataInputStream())
+
+                storeFile file(properties.getProperty('RELEASE_STORE_FILE'))
+                storePassword properties.getProperty('RELEASE_STORE_PASSWORD')
+                keyAlias properties.getProperty('RELEASE_STORE_KEY_ALIAS')
+                keyPassword properties.getProperty('RELEASE_KEY_PASSWORD')
+            }
+        }
+    }
+
+    buildTypes {
+        if (localPropertiesFile.exists()) {
+            release {
+                // minifyEnabled true
+                proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+
+    buildFeatures {
+        viewBinding true
+    }
+    ndkVersion '21.4.7075529'
+    buildToolsVersion '30.0.3'
+
+    lintOptions {
+        disable 'MissingTvBanner'
+        disable 'ExpiredTargetSdkVersion'
+        disable 'ProtectedPermissions'
+    }
+}
+
+android.applicationVariants.all { variant ->
+    variant.outputs.all { output ->
+        def fileName = "OpenSync-${output.baseName}-${variant.versionName}.apk"
+
+        outputFileName = new File(output.outputFile.parent, fileName).getName()
+    }
+}
+
+dependencies {
+    // https://mvnrepository.com/artifact/commons-io/commons-io
+    implementation group: 'commons-io', name: 'commons-io', version: '2.6'
+    implementation 'androidx.leanback:leanback:1.0.0'
+    implementation 'com.google.android.material:material:1.4.+'
+    implementation 'androidx.appcompat:appcompat:1.4.1'
+    implementation 'androidx.constraintlayout:constraintlayout:2.1.3'
+    implementation 'androidx.navigation:navigation-fragment:2.4.1'
+    implementation 'androidx.navigation:navigation-ui:2.4.1'
+    implementation 'com.github.bumptech.glide:glide:4.11.0'
+    // https://mvnrepository.com/artifact/eu.neilalexander/jnacl
+    implementation group: 'eu.neilalexander', name: 'jnacl', version: '1.0.0'
+    implementation 'org.greenrobot:eventbus:3.2.0'
+    implementation 'org.apache.commons:commons-compress:1.21'
+    // https://mvnrepository.com/artifact/org.zeromq/jeromq
+    implementation group: 'org.zeromq', name: 'jeromq', version: '0.5.2'
+}
+
+task buildOpenSyncCore (type: Exec) {
+    def arch = System.getProperty("os.name")
+
+    def toolchain_arch
+    if (arch.contains("Mac OS X")) {
+        toolchain_arch = "darwin-x86_64"
+    } else {
+        toolchain_arch = "linux-x86_64"
+    }
+
+    def toolchain = "$android.ndkDirectory/toolchains/llvm/prebuilt/$toolchain_arch"
+    def api = "30"
+    // https://developer.android.com/ndk/guides/other_build_systems
+    // For "armeabi-v7a"
+    def android_plat = "android-arm"
+    def abi = "armeabi-v7a"
+    def host_arch = "armv7a-linux-androideabi"
+    def lib_arch = "arm-linux-androideabi"
+    // For "arm64-v8a"
+    // def android_plat = "android-arm64"
+    // def abi = "arm64-v8a"
+    // def host_arch = "aarch64-linux-android"
+    // def lib_arch = "aarch64-linux-android/"
+    def opensync_target = "ANDROID_GENERIC"
+
+    commandLine 'make', '-C', System.getenv("OPENSYNC_C_PKG"),
+            "TARGET=$opensync_target",
+            "TOOLCHAIN=$toolchain",
+            "ANDROID_ABI=$abi",
+            "API=$api",
+            "ANDROID_NDK_HOME=$android.ndkDirectory",
+            "ANDROID_NDK_ROOT=$android.ndkDirectory",
+            "ANDROID_PLAT=$android_plat",
+            "OPENSSL_ROOT_DIR=$toolchain/sysroot/usr/lib/$lib_arch/$api",
+            "OPENSSL_LIBRARIES=$toolchain/sysroot/usr/lib/$lib_arch/$api",
+            "HOST_ARCH=$host_arch",
+            "AR=$toolchain/bin/llvm-ar",
+            "CC=$toolchain/bin/$host_arch$api-clang",
+            "AS=$toolchain/bin/$host_arch$api-clang",
+            "CXX=$toolchain/bin/$host_arch$api-clang++",
+            "LD=$toolchain/bin/$host_arch$api-ld",
+            "RANLIB=$toolchain/bin/llvm-ranlib",
+            "STRIP=$toolchain/bin/llvm-strip"
+}
+
+preBuild.dependsOn buildOpenSyncCore
+
+task openSyncClean(type: Exec) {
+    commandLine 'make', '-C', System.getenv("OPENSYNC_C_PKG"), 'clean'
+}
+
+clean.dependsOn openSyncClean

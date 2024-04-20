@@ -1,0 +1,3 @@
+comment "Android Manager"
+
+rsource "../src/androidm/kconfig/Kconfig.managers"

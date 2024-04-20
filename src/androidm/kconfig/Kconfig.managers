@@ -1,0 +1,34 @@
+menuconfig MANAGER_ANDROIDM
+    bool "Android Manager (ANDROIDM)"
+    default n
+    help
+        Android Manager
+
+if MANAGER_ANDROIDM
+    config MANAGER_ANDROIDM_CFG
+        string "ANDROIDM Startup configuration"
+        default "androidm;true;needs_plan_b=true"
+        help
+            Android Manager startup configuration
+
+    config ANDROIDM_STREAMING_REPORT
+        bool "Enable support for reporting streaming information"
+        default n
+        help
+            If enabled, device supports reporting Streaming real time information
+            to controller.
+
+    config ANDROIDM_APP_REPORT
+        bool "Enable support for reporting app related information"
+        default n
+        help
+            If enabled, device supports reporting App usage or App related information
+            to controller.
+
+    config PERIPHERAL_DEVICE_OVSDB
+        bool "Update Peripheral_Device information to OVSDB"
+        default n
+        help
+            If enabled, peripheral device information can be written into OVSDB.
+            Otherwise, we just show information in the ANDROIDM.
+endif
